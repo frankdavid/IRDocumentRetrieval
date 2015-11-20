@@ -50,16 +50,17 @@ object RetrievalSystem {
 
     var df = scala.collection.mutable.Map[String, Int]()
 
+    var allQueryWords = normalizeTokenList(Tokenizer.tokenize(topics.map(_.title).mkString(" "))).distinct.toSet
     //1st iteration to calculate document frequencies
     for (doc <- tipster.stream.take(nrDocs)) {
-      var normalizedTokens = normalizeTokenList(doc.tokens).distinct
+      var normalizedTokens = normalizeTokenList(doc.tokens).distinct.toSet
+      normalizedTokens &= allQueryWords
       for (token <- normalizedTokens) {
         df(token) = 1 + df.getOrElse(token, 0)
       }
 
       //      println(normalizedTokens)
     }
-
     var idf = TermFrequencies.idf(df.toMap, nrDocs)
 
     //2nd iteration
