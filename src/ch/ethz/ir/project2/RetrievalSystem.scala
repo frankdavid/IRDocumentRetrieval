@@ -46,7 +46,7 @@ object RetrievalSystem {
     println("Number of files in zips = " + tipster.length)
 
     var length: Long = 0
-    var nrDocs: Int = 10000
+    var nrDocs: Int = 100000
 
     var df = scala.collection.mutable.Map[String, Int]()
 
@@ -123,8 +123,9 @@ object RetrievalSystem {
     for (topic <- topicList) {
       var predicted = queryHeaps(topic.id).map(_.title).toSet
       var actual = benchmark(topic.id).toSet & predicted
+      var originalSize = benchmark(topic.id).size
       //fill actual with junk up to size 100
-      while (actual.size < 100) {
+      while (actual.size < 100 && actual.size < originalSize) {
         actual = actual + actual.size.toString
       }
       var pr = PrecisionRecall.evaluate(predicted, actual)
