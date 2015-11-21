@@ -119,11 +119,21 @@ object RetrievalSystem {
   }
 
   def evaluate(benchmark: Map[Int, Set[String]], topicList: List[Topic]): Unit = {
+    var map = 0.0
     for (topic <- topicList) {
-      var pr = PrecisionRecall.evaluate(queryHeaps(topic.id).map(_.title).toSet, benchmark(topic.id).toSet)
-      var f = FScore.evaluate(queryHeaps(topic.id).map(_.title).toSet, benchmark(topic.id).toSet)
+      var predicted = queryHeaps(topic.id).map(_.title).toSet
+      var actual = benchmark(topic.id).toSet & predicted
+      //fill actual with junk up to size 100
+      while (actual.size < 100) {
+        actual = actual + actual.size.toString
+      }
+      var pr = PrecisionRecall.evaluate(predicted, actual)
+      var f = FScore.evaluate(predicted, actual)
+      var ap = AveragePrecision.evaluate(queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title), actual)
+      map += ap
       println(pr + ", F-score :" + f)
     }
+    println("Map: ", map / topicList.size)
 
   }
 
