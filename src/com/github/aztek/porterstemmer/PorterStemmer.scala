@@ -8,7 +8,7 @@ package com.github.aztek.porterstemmer
  *
  * @author Evgeny Kotelnikov <evgeny.kotelnikov@gmail.com>
  */
-class PorterStemmer {
+object PorterStemmer {
   def stem(word: String): String = {
     // Deal with plurals and past participles
     var stem = new Word(word).applyReplaces(
@@ -221,9 +221,9 @@ class PorterStemmer {
   private implicit def suffixedStemBuilder: String ⇒ StemBuilder = suffixStemBuilder
   
   def main (args: Array[String]) = {
-//    val words = List( "likely", "liking", "likewise", "likert")
-//    val result = words.zip(words.map( word => PorterStemmer.stem(word)))
-//    println(result.mkString(", "))
+    val words = List( "likely", "liking", "likewise", "likert")
+    val result = words.zip(words.map( word => PorterStemmer.stem(word)))
+    println(result.mkString(", "))
   } 
     
 }

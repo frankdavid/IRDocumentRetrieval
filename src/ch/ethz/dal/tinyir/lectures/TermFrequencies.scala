@@ -24,7 +24,7 @@ object TermFrequencies {
 
   def tf_idf(query: List[String], ltf: Map[String, Double], idf: Map[String, Double]): Double =
     query.map{w => ltf.getOrElse[Double](w, 1) * idf.getOrElse[Double](w, 1)}.sum
-    
+
   def main(args: Array[String]) = {
     val query : Set[String] = Set("green", "blue", "powder") 
     val doc : List[String] = List("green", "blue", "red", "green")

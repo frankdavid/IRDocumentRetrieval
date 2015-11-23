@@ -3,7 +3,6 @@ package ch.ethz.dal.tinyir.indexing
 import ch.ethz.dal.tinyir.processing.{Document,StringDocument}
 
 import scala.math._
-import scala.math.Ordered.orderingToOrdered
 
 case class ProxResult(val id: Int, val lpos: Int, val rpos: Int) extends Result[ProxResult] {
   def matches(that: ProxResult) : Int = {    
@@ -24,7 +23,7 @@ class PosIndex (docs: Stream[Document]) extends InvertedIndex[ProxResult] {
 
   case class PosPosting(val id: Int, val pos: Int) extends Ordered[PosPosting] {
     def this(t: PosTuple) = this(t.id, t.pos) 
-    def compare(that: PosPosting) = (this.id, this.pos) compare (that.id, that.pos) 
+    def compare(that: PosPosting) = Ordering[Tuple2[Int, Int]].compare((this.id, this.pos), (that.id, that.pos) ) 
   }
   type PostList = List[PosPosting]
   val index : Map[String, PostList] = {
