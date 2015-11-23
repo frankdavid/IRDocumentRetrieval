@@ -1,10 +1,10 @@
 package ch.ethz.ir.project2
 
-import ch.ethz.dal.tinyir.io.TipsterStream
-import ch.ethz.dal.tinyir.lectures.{PrecisionRecall, TermFrequencies}
-import ch.ethz.dal.tinyir.processing.{StopWords, Tokenizer}
+import ch.ethz.dal.tinyir.lectures.PrecisionRecall
+import ch.ethz.dal.tinyir.processing._
 import com.github.aztek.porterstemmer.PorterStemmer
 
+import scala.collection.immutable.{SortedBagConfiguration, TreeBag}
 import scala.collection.mutable
 import scala.util.matching.Regex
 
@@ -18,8 +18,12 @@ object RetrievalSystem {
   var queryHeaps = scala.collection.mutable.Map[Int, mutable.PriorityQueue[ScoredResult]]()
 
   def normalizeTokenList(tokens: List[String]) = {
-    val stage1 = tokens.map(_.toLowerCase()).filter(!_.isEmpty)
-    stopWords.filter(stage1).map(porterStemmer.stem)
+    val stage1 = tokens.map(_.filter(_.isLetter).toLowerCase).filter(!_.isEmpty)
+    stopWords.filter(stage1).map { word =>
+      val stemmer = new Stemmer()
+      stemmer.add(word)
+      stemmer.stem()
+    }
   }
 
   def score(res: ScoredResult) = -res.score
@@ -38,56 +42,87 @@ object RetrievalSystem {
     } else false
   }
 
-  def score(path: String, topics: List[Topic]): Unit = {
-    val tipster = new TipsterStream(path)
-    println("Number of files in zips = " + tipster.length)
-
+  var k = 0
+  def score(path: String, topics: Array[Topic]): Unit = {
+//    val stream = tipster.stream.map(Document)
+    /*
     val nrDocs: Int = 10000
+    def stream = new TipsterStream(path).stream.sliding(200, 200).flatMap { buffer =>
+      buffer.map(Document).subscribeOn(ComputationScheduler()).onBackpressureDrop
+    }.take(nrDocs)
 
-    val df = scala.collection.mutable.Map[String, Int]()
+//    println("Number of files in zips = " + tipster.length)
 
     //1st iteration to calculate document frequencies
-    for (doc <- tipster.stream.take(nrDocs)) {
-      val normalizedTokens = normalizeTokenList(doc.tokens).distinct
-      for (token <- normalizedTokens) {
-        df(token) = 1 + df.getOrElse(token, 0)
-      }
+    val frequencies = stream.flatMapIterable(_.normalizedTokens).toMultiMap(identity)
+
+    val f = frequencies.toBlocking.first
+    println(f.maxBy(_._2.size))
+    */
+//    val df = frequencies.map(_.mapValues(_.size))
+//    df.foreach(println)
+
+
+//    val df = scala.collection.mutable.Map[String, Int]()
+//    val stream = tipster.stream.take(10000).map(Document)
+//    for (doc <- stream) {
+//      val normalizedTokens = doc.normalizedTokens
+//      for (token <- normalizedTokens) {
+//        df(token) = 1 + df.getOrElse(token, 0)
+//      }
 
       //      println(normalizedTokens)
-    }
+//    }
 
+/*
     val idf = TermFrequencies.idf(df.toMap, nrDocs)
 
     //2nd iteration
     var i = 0
-    for (doc <- tipster.stream.take(nrDocs)) {
+    val queries = topics.map(Query)
+    for (doc <- stream) {
       i += 1
       if (i % 1000 == 0) {
         println("At iteration: ", i)
       }
-      val normalizedTokens = normalizeTokenList(doc.tokens)
+      val normalizedTokens = doc.normalizedTokens
       val termFreq = TermFrequencies.logtf(normalizedTokens)
 
-      for (queryTopic <- topics) {
-        val queryTokens = normalizeTokenList(Tokenizer.tokenize(queryTopic.title))
-        add(queryTopic.id, ScoredResult(doc.name, TermFrequencies.tf_idf(queryTokens, termFreq, idf)))
+      for (query <- queries) {
+        add(query.id, ScoredResult(doc.name, TermFrequencies.tf_idf(query.normalizedTokens, termFreq, idf)))
       }
     }
+  */
+    Thread.sleep(2000000)
+  }
+
+  case class Query(queryTopic: Topic) {
+    @inline def id: Int = queryTopic.id
+    val normalizedTokens: Seq[String] = normalizeTokenList(Tokenizer.tokenize(queryTopic.title))
+  }
+
+  case class Document(val doc: XMLDocument) {
+//    println(Thread.currentThread().hashCode())
+    @inline def name = doc.name
+
+    val normalizedTokens = normalizeTokenList(doc.tokens).distinct
+
+    def normalizedTokensBag = TreeBag[String]()(SortedBagConfiguration.keepAll) ++ normalizedTokens
   }
 
   case class Topic(title: String, id: Int)
 
-  def getTopics(path: String): List[Topic] = {
+  def getTopics(path: String): Array[Topic] = {
     val patternNumber = new Regex("Number: .+")
     val patternTitle = new Regex("Topic: .+")
 
     val topics = scala.io.Source.fromFile(path).mkString
 
-    val list = (patternNumber findAllIn topics).toList.map(_.replace("Number: ", "")) zip (patternTitle findAllIn topics).toList
-    list.map(w => Topic(w._2.trim, w._1.trim.toInt))
+    val list = (patternNumber findAllIn topics).map(_.replace("Number: ", "")) zip (patternTitle findAllIn topics)
+    list.map(w => Topic(w._2.trim, w._1.trim.toInt)).toArray
   }
 
-  def displayTopicResults(topics: List[Topic]): Unit = {
+  def displayTopicResults(topics: Array[Topic]): Unit = {
     for (topic <- topics) {
       val resultList = queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title).zipWithIndex.map(w => (w._1, w._2 + 1))
       for (result <- resultList) {
@@ -113,7 +148,7 @@ object RetrievalSystem {
     resultMap.toMap
   }
 
-  def evaluate(benchmark: Map[Int, Set[String]], topicList: List[Topic]): Unit = {
+  def evaluate(benchmark: Map[Int, Set[String]], topicList: Array[Topic]): Unit = {
     for (topic <- topicList) {
       val pr = PrecisionRecall.evaluate(queryHeaps(topic.id).map(_.title).toSet, benchmark(topic.id))
       val f = FScore.evaluate(queryHeaps(topic.id).map(_.title).toSet, benchmark(topic.id))
@@ -123,11 +158,19 @@ object RetrievalSystem {
   }
 
   def main(args: Array[String]) {
-    val benchmark = readBenchmarkData("C:\\Users\\Zalan\\Downloads\\IR2015\\tipster\\qrels")
-    val topics = getTopics("C:\\Users\\Zalan\\Downloads\\IR2015\\tipster\\topics")
-    RetrievalSystem.score("C:\\Users\\Zalan\\Downloads\\IR2015\\tipster\\zips", topics)
-    displayTopicResults(topics)
-    evaluate(benchmark, topics)
+//    Thread.sleep(000)
+    var i = 0
+    new TipsterCorpusIterator("/Users/david/Downloads/IR2015/tipster/zips").map(Document).foreach { _ =>
+      i += 1
+      if (i % 1000 == 0) {
+        println(i)
+      }
+    }
+//    val benchmark = readBenchmarkData("/Users/david/Downloads/IR2015/tipster/qrels")
+//    val topics = getTopics("/Users/david/Downloads/IR2015/tipster/topics")
+//    RetrievalSystem.score("/Users/david/Downloads/IR2015/tipster/zips", topics)
+//    displayTopicResults(topics)
+//    evaluate(benchmark, topics)
   }
 
 }
