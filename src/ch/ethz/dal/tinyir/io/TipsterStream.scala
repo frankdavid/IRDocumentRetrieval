@@ -1,13 +1,12 @@
 package ch.ethz.dal.tinyir.io
 
-import ch.ethz.dal.tinyir.processing.TipsterParse
-import ch.ethz.dal.tinyir.processing.Tokenizer
-import ch.ethz.dal.tinyir.processing.XMLDocument
+import ch.ethz.dal.tinyir.processing.{TipsterParse, XMLDocument}
+import rx.lang.scala.Observable
 
 class TipsterStream (path: String, ext: String = "") 
 extends ParsedXMLStream(new ZipDirStream(path, "")){
-  def stream : Stream[XMLDocument] = unparsed.stream.map(is => new TipsterParse(is))
-  def length = unparsed.length 
+  def stream : Observable[XMLDocument] = unparsed.stream.map(new TipsterParse(_))
+  def length = unparsed.length
 }
 
 object TipsterStream  {

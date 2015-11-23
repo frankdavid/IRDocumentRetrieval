@@ -1,26 +1,18 @@
 package ch.ethz.dal.tinyir.processing
 
-import io.Source
-import io.Codec
-import util.Try
-import util.Success
-
-import java.nio.charset.Charset
-import java.io.InputStream
-import java.io.FileInputStream
-import java.io.BufferedInputStream
+import java.io.{BufferedInputStream, FileInputStream, InputStream}
 import javax.xml.parsers.DocumentBuilderFactory
-import org.w3c.dom.{Document => XMLDoc}
-import org.w3c.dom.NodeList
-import org.xml.sax.InputSource
+
+import org.w3c.dom.{Document => XMLDoc, NodeList}
+
+import scala.util.Try
 
 class XMLDocument (is: InputStream) extends Document {
   
  def this(fname: String) = this(new BufferedInputStream(new FileInputStream(fname)))
 
-  val doc : XMLDoc = {   
-    val dbFactory = DocumentBuilderFactory.newInstance
-    val dBuilder  = dbFactory.newDocumentBuilder
+  val doc : XMLDoc = {
+    val dBuilder  = XMLDocument.dbFactory.newDocumentBuilder
     val d = dBuilder.parse(is)
     is.close()
     d
@@ -75,6 +67,8 @@ class XMLDocument (is: InputStream) extends Document {
   }  
 }
 
-object XMLDocument 
+object XMLDocument {
+  private val dbFactory = DocumentBuilderFactory.newInstance
+}
   
  

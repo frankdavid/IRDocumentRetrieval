@@ -1,14 +1,9 @@
 package ch.ethz.dal.tinyir.io
 
-import util.Try
-import util.Failure
-import util.Success
-import io.Source
-import java.io.File
-import java.io.InputStream
-import java.util.zip.ZipFile
-import java.util.zip.ZipEntry
-import scala.collection.JavaConversions._
+import java.io.{File, InputStream}
+
+import rx.lang.scala.Observable
+import rx.lang.scala.schedulers.IOScheduler
 
 // create a document stream out of all files in a all zip files
 // that are found in a given directory
@@ -23,11 +18,11 @@ extends DirStream (dirpath,extension) {
     ziplist.map(new ZipStream(_,extension).stream).reduceLeft(_ append _)
   }
 */
-  override def stream : Stream[InputStream] =  
-    ziplist.map(new ZipStream(_,extension).stream).reduceLeft(_ append _)
+  override def stream : Observable[InputStream] =
+    Observable.from(ziplist).flatMap(new ZipStream(_,extension).stream.subscribeOn(IOScheduler()))
   
   val ziplist = new File(dirpath)
-      .listFiles.filter(isZipFile(_))        
+      .listFiles.filter(isZipFile)
   	  .map(z => z.getAbsolutePath).sorted.toList
   
   private def isZipFile(f: File) = f.getName.endsWith(".zip")

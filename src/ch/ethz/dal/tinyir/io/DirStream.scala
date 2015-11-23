@@ -1,14 +1,10 @@
 package ch.ethz.dal.tinyir.io
 
-import scala.io.Source
-import util.Try
-import util.Success
-import util.Failure
-import util.Properties
-import io.Codec
-import java.nio.charset.Charset
-import java.io.InputStream
-import java.io.File
+import java.io.{File, InputStream}
+
+import rx.lang.scala.Observable
+
+import scala.util.Try
 
 // find all valid files in a directory and return them as a stream 
 // main method: stream
@@ -16,11 +12,11 @@ import java.io.File
 class DirStream (dirpath: String, extension: String = "") 
 extends DocStream {
 
-  def stream: Stream[InputStream] = sortedNames.map(fn => DocStream.getStream(fn)).toStream 
+  def stream: Observable[InputStream] = Observable.from(sortedNames.map(fn => DocStream.getStream(fn)))
   def length = validNames.length    
 
   private def sortedNames = validNames.sorted(DirStream.FileOrder.orderingByLex) 
-  private def validNames = new File(dirpath).listFiles.map(path(_)).filter(valid(_))
+  private def validNames = new File(dirpath).listFiles.map(path).filter(valid)
   private def valid(fn: String): Boolean = fn.endsWith(extension)
   private def path (f: File): String = Try(f.getAbsolutePath).getOrElse("")  
 }
