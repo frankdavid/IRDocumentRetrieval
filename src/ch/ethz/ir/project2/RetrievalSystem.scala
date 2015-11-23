@@ -52,7 +52,12 @@ object RetrievalSystem {
     }.take(nrDocs)
 
 //    println("Number of files in zips = " + tipster.length)
+    var length: Long = 0
+    var nrDocs: Int = 100000
 
+    var df = scala.collection.mutable.Map[String, Int]()
+
+    var allQueryWords = normalizeTokenList(Tokenizer.tokenize(topics.map(_.title).mkString(" "))).distinct.toSet
     //1st iteration to calculate document frequencies
     val frequencies = stream.flatMapIterable(_.normalizedTokens).toMultiMap(identity)
 
@@ -148,12 +153,23 @@ object RetrievalSystem {
     resultMap.toMap
   }
 
-  def evaluate(benchmark: Map[Int, Set[String]], topicList: Array[Topic]): Unit = {
+  def evaluate(benchmark: Map[Int, Set[String]], topicList: List[Topic]): Unit = {
+    var map = 0.0
     for (topic <- topicList) {
-      val pr = PrecisionRecall.evaluate(queryHeaps(topic.id).map(_.title).toSet, benchmark(topic.id))
-      val f = FScore.evaluate(queryHeaps(topic.id).map(_.title).toSet, benchmark(topic.id))
+      var predicted = queryHeaps(topic.id).map(_.title).toSet
+      var actual = benchmark(topic.id).toSet & predicted
+      var originalSize = benchmark(topic.id).size
+      //fill actual with junk up to size 100
+      while (actual.size < 100 && actual.size < originalSize) {
+        actual = actual + actual.size.toString
+      }
+      var pr = PrecisionRecall.evaluate(predicted, actual)
+      var f = FScore.evaluate(predicted, actual)
+      var ap = AveragePrecision.evaluate(queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title), actual)
+      map += ap
       println(pr + ", F-score :" + f)
     }
+    println("Map: ", map / topicList.size)
 
   }
 
