@@ -22,7 +22,7 @@ object TermFrequencies {
 
   def log2 (x : Double) = log10(x)/log10(2.0)
 
-  def tf_idf(query: List[String], ltf: Map[String, Double], idf: Map[String, Double]): Double =
+  def tfIdf(query: Seq[String], ltf: Map[String, Double], idf: Map[String, Double]): Double =
     query.map{w => ltf.getOrElse[Double](w, 1) * idf.getOrElse[Double](w, 1)}.sum
     
   def main(args: Array[String]) = {

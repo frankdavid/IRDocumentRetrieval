@@ -3,7 +3,6 @@ package ch.ethz.dal.tinyir.io
 import java.io.{File, InputStream}
 
 import rx.lang.scala.Observable
-import rx.lang.scala.schedulers.IOScheduler
 
 // create a document stream out of all files in a all zip files
 // that are found in a given directory
@@ -19,7 +18,7 @@ extends DirStream (dirpath,extension) {
   }
 */
   override def stream : Observable[InputStream] =
-    Observable.from(ziplist).flatMap(new ZipStream(_,extension).stream.subscribeOn(IOScheduler()))
+    Observable.from(ziplist).flatMap(new ZipStream(_,extension).stream)
   
   val ziplist = new File(dirpath)
       .listFiles.filter(isZipFile)
