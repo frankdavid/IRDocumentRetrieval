@@ -11,7 +11,7 @@ class XMLDocument (is: InputStream) extends Document {
   
  def this(fname: String) = this(new BufferedInputStream(new FileInputStream(fname)))
 
-  val doc : XMLDoc = {
+  @transient val doc : XMLDoc = {
     val dBuilder  = XMLDocument.dbFactory.newDocumentBuilder
     val d = dBuilder.parse(is)
     is.close()
@@ -19,7 +19,7 @@ class XMLDocument (is: InputStream) extends Document {
   }  
 
   // all accesses to specific elements are optional 
-  def title  : String = read(doc.getElementsByTagName("title")) 
+  def title  : String = read(doc.getElementsByTagName("title"))
   def body   : String = read(doc.getElementsByTagName("text"))
   def name   : String = "" 
   def date   : String = ""

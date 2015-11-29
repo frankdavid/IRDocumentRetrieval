@@ -1,7 +1,6 @@
 package ch.ethz.dal.tinyir.alerts
 
 import scala.collection.mutable.PriorityQueue
-import scala.math.Ordering.Implicits._
 
 case class ScoredResult (title : String, score: Double)
 
@@ -11,7 +10,7 @@ class Alerts (q: String, n: Int) {
 
   
   // score a document and try to add to results
-  def process(title: String, doc: List[String]) : Boolean = {
+  def process(title: String, doc: Seq[String]) : Boolean = {
     val score = query.score(doc)
     add(ScoredResult(title,score))
   }

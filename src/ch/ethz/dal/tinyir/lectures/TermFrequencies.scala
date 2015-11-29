@@ -3,10 +3,10 @@ package ch.ethz.dal.tinyir.lectures
 import Math.log10
 object TermFrequencies {
 
-  def tf(doc : List[String]) : Map[String, Int] = 
+  def tf(doc : Seq[String]) : Map[String, Int] =
     doc.groupBy(identity).mapValues(l => l.length)
   
-  def logtf(doc : List[String]) : Map[String, Double] = 
+  def logtf(doc : Seq[String]) : Map[String, Double] =
     logtf(tf(doc))
     
   def atf(doc : List[String]) : Map[String, Double] = { 
@@ -23,7 +23,7 @@ object TermFrequencies {
   def log2 (x : Double) = log10(x)/log10(2.0)
 
   def tfIdf(query: Seq[String], ltf: Map[String, Double], idf: Map[String, Double]): Double =
-    query.map{w => ltf.getOrElse[Double](w, 1) * idf.getOrElse[Double](w, 1)}.sum
+    query.map{w => ltf.getOrElse(w, 0d) * idf.getOrElse(w, 0d)}.sum
 
   def main(args: Array[String]) = {
     val query : Set[String] = Set("green", "blue", "powder") 

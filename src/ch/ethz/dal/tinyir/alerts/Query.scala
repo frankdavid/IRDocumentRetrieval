@@ -6,7 +6,7 @@ class Query (query: String) {
   val qterms = Tokenizer.tokenize(query).distinct
   val length = qterms.length
 
-  def score (doc: List[String]) : Double = {
+  def score (doc: Seq[String]) : Double = {
     val tfs : Map[String,Int]= doc.groupBy(identity).mapValues(l => l.length)
     val qtfs = qterms.flatMap(q => tfs.get(q))
     val numTermsInCommon = qtfs.length 
