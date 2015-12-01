@@ -9,7 +9,7 @@ import scala.util.matching.Regex
 
 object RetrievalSystem {
 
-  implicit val termExtractor = TermExtractor(shouldStem = true, shouldSplit = true, maxWindowSize = 1)
+  implicit val termExtractor = TermExtractor(shouldStem = true, shouldSplit = true, maxWindowSize = 2)
 
   val queryHeaps = scala.collection.mutable.Map[Int, mutable.PriorityQueue[ScoredResult]]()
 
@@ -71,25 +71,30 @@ object RetrievalSystem {
 
   def scoreLanguageModel(): Unit = {
     val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
-    val lambda = 0.0d
+    @inline def lambda(docTerms: Set[String]) = { 0.9
+//      val t = docTerms.size / 500
+//      0.8 - 0.8 * (1 / (1 + math.exp(-t)))
+    }
     val cfSum = collectionFrequency.values.sum.toDouble
     println("Number of files in zips = " + tipsterCorpusIterator.size)
 
 
     val queries = topics.map(Query)
-    println("Calculating queries logtf lambda=" + lambda)
+    println("Calculating queries variable lambda")
     for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
-      val tf = TermFrequencies.tf(doc.terms)
+      val docTerms = doc.terms
+      val docTermsSet = doc.terms.toSet
+      val tf = TermFrequencies.tf(docTerms)
       val tfSum = tf.values.sum.toDouble
       if (tfSum > 0) {
         for (query <- queries) {
-          var queryScore = 0d
-          for (term <- query.terms) {
+          var sumlogPwd = math.log(lambda(docTermsSet))
+          for (term <- docTermsSet.intersect(query.termsSet)) {
             val pHatwd = tf.getOrElse(term, 0) / tfSum
-            val pwd = (1 - lambda) * pHatwd + lambda * (collectionFrequency.getOrElse(term, 0) / cfSum)
-            queryScore += pwd
+            val pw = collectionFrequency.getOrElse(term, 0) / cfSum
+            sumlogPwd += math.log(1 + (1 - lambda(docTermsSet)) / lambda(docTermsSet) * pHatwd / pw)
           }
-          add(query.id, ScoredResult(doc.name, queryScore))
+          add(query.id, ScoredResult(doc.name, sumlogPwd))
         }
       }
     }
@@ -208,5 +213,7 @@ object RetrievalSystem {
     val terms: Seq[String] = {
       termExtractor.extractTokens(queryTopic.title) //++ termExtractor.extractTokens(queryTopic.concepts)
     }
+
+    val termsSet = terms.toSet
   }
 }
