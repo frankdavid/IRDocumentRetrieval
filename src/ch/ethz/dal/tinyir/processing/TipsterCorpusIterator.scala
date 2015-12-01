@@ -73,7 +73,10 @@ class TipsterCorpusIterator(path : String) extends Iterator[TipsterParse] {
   		}
   	}
   }
- 
+
+	override def toIterable = new Iterable[TipsterParse] {
+		def iterator = TipsterCorpusIterator.this
+	}
 }
 
 /** Example code counting number of tokens in corpus

@@ -11,7 +11,7 @@ class TipsterDocument(val body: String, val name: String) extends Document with 
 
   def content = body
 
-  def normalizedTokens: Seq[String] = Normalizer.normalizeTokenList(tokens)
+  def terms(implicit termExtractor: TermExtractor): Seq[String] = termExtractor.extractTokens(content)
 }
 
 object TipsterDocument {

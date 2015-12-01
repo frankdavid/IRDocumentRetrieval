@@ -2,14 +2,17 @@ package ch.ethz.ir.project2
 
 import java.io.{FileOutputStream, ObjectOutputStream}
 
+import ch.ethz.dal.tinyir.io.TipsterStream
 import ch.ethz.dal.tinyir.processing.TipsterCorpusIterator
 
 object Exporter {
 
   def main(args: Array[String]) {
-    val oos = new ObjectOutputStream(new FileOutputStream("alldocs_.dat"))
+    val length = new TipsterStream(FilePathConfig.zipPath).length
+    val oos = new ObjectOutputStream(new FileOutputStream(FilePathConfig.unzippedCorpus))
+    oos.writeInt(length)
     new ProgressIndicatorWrapper(
-      new TipsterCorpusIterator("/Users/david/Downloads/IR2015/tipster/zips"), 1078000)//.foreach(oos.writeUnshared)
+      new TipsterCorpusIterator(FilePathConfig.zipPath), length)
               .zipWithIndex
           .foreach { case (doc, i) =>
               oos.writeUnshared(TipsterDocument(doc))

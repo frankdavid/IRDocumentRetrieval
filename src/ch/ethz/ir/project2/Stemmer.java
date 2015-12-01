@@ -261,13 +261,13 @@ public class Stemmer {
 	 * @return true if the buffer ends in s
 	 */
 	private final boolean endsIn(String s) {
-		s = s.toLowerCase();
+//		s = s.toLowerCase();
 		int len = s.length();
 		int o = end - len + 1;
 		if (o < 0)
 			return false;
 		for (int i = 0; i < len; i++)
-			if (Character.toLowerCase(buffer.charAt(o + i)) != s.charAt(i)) {
+			if (Character.toLowerCase(buffer.charAt(o + i)) != Character.toLowerCase(s.charAt(i))) {
 				return false;
 			}
 		current = end - len;

@@ -1,19 +1,45 @@
 package ch.ethz.ir.project2
 
-import java.io.{ObjectInputStream, FileInputStream}
+import java.io._
 
-import ch.ethz.dal.tinyir.io.TipsterStream
-import ch.ethz.dal.tinyir.lectures.{TermFrequencies, PrecisionRecall}
-import ch.ethz.dal.tinyir.processing.Tokenizer
+import ch.ethz.dal.tinyir.lectures.{PrecisionRecall, TermFrequencies}
 
 import scala.collection.mutable
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 import scala.util.matching.Regex
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object RetrievalSystem {
 
-  case class ScoredResult(title: String, score: Double)
+  implicit val termExtractor = TermExtractor(shouldStem = true, shouldSplit = true, maxWindowSize = 1)
 
-  var queryHeaps = scala.collection.mutable.Map[Int, mutable.PriorityQueue[ScoredResult]]()
+  val queryHeaps = scala.collection.mutable.Map[Int, mutable.PriorityQueue[ScoredResult]]()
+
+  val topics = {
+    val numberRegex = new Regex("Number: ([^<]+)")
+    val titleRegex = new Regex("Topic: ([^<]+)")
+    val conceptRegex = new Regex("(?s)Concept\\(s\\):([^<]+)")
+
+    val topicsString = scala.io.Source.fromFile(FilePathConfig.topics).mkString
+
+//    val list = (numberRegex findAllIn topicsString).map(_.replace("Number: ", "")) zip (titleRegex findAllIn topicsString).map(_.replace("Topic: ", ""))
+
+    val numbers = numberRegex.findAllMatchIn(topicsString).map(_.group(1))
+    val titles = titleRegex.findAllMatchIn(topicsString).map(_.group(1))
+    val concepts = conceptRegex.findAllMatchIn(topicsString).map { match_ =>
+      val conceptString = match_.group(1)
+      conceptString
+          .split("(\\d+\\.|,)")
+          .map(_.replaceAll("\\s+", " ").trim)
+          .filterNot(c => c.startsWith("NOT") || c.isEmpty)
+    }
+    val topics = for (((number, title), concepts) <- (numbers zip titles) zip concepts) yield {
+      Topic(title.trim, number.trim.toInt, concepts)
+    }
+
+    topics.toIndexedSeq
+  }
 
   def score(res: ScoredResult) = -res.score
 
@@ -30,101 +56,106 @@ object RetrievalSystem {
     } else false
   }
 
-  def score(path: String, topics: Seq[Topic]): Unit = {
-//    println("Number of files in zips = " + tipster.length)
-    val nrDocs = new TipsterStream("/Users/david/Downloads/IR2015/tipster/zips").length
-    val tipster = new TipsterUnzippedIterator(path)//.take(nrDocs)
-//    def stream = new TipsterStream(path).stream.tumbling(500).flatMap(_.map(Document).subscribeOn(ComputationScheduler()))
-//    .tumbling(100).flatMap { buffer =>
-//      buffer.map(Document).subscribeOn(ComputationScheduler())
-//    }//.take(nrDocs)
-
-//    println("Number of files in zips = " + tipster.length)
-
-
-//    var allQueryWords = normalizeTokenList(Tokenizer.tokenize(topics.map(_.title).mkString(" "))).distinct.toSet
-    //1st iteration to calculate document frequencies
-//    val frequencies = stream.flatMapIterable(_.normalizedTokens)
-//                            .foldLeft(Map[String, Int]()) { case (m, s) => m.updated(s, m.getOrElse(s, 0) + 1)}
-
-//    val f = frequencies.toBlocking.first
-//    println(f.maxBy(_._2))
-
-//    val df = frequencies.map(_.mapValues(_.size))
-//    df.foreach(println)
-
-    val is = new ObjectInputStream(new FileInputStream("df.dat"))
-    val df = is.readObject().asInstanceOf[scala.collection.immutable.Map[String, Int]]
-    is.close()
-
-//    val df = {
-//       val df = mutable.Map[String, Int]()
-//      new ProgressIndicatorWrapper(tipster.map(Document), nrDocs).foreach { doc =>
-//        doc.normalizedTokens.foreach { token =>
-//          df(token) = df.getOrElse(token, 0) + 1
-//        }
-//      }
-//      val os = new ObjectOutputStream(new FileOutputStream("df.dat"))
-//      os.writeObject(df.toMap)
-//      os.close()
-//      df.toMap
-//    }
-
-
-    //2nd iteration
-
+  def scoreTfIdf(): Unit = {
+    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
+    println("Number of files in zips = " + tipsterCorpusIterator.size)
     val queries = topics.map(Query)
-    val idf = TermFrequencies.idf(df, nrDocs)
-//    def top100(r: Seq[ScoredResult]) = r.sortBy(score).take(100)
-//    val result = stream.flatMapIterable { doc =>
-//      val logtf = TermFrequencies.logtf(doc.normalizedTokens)
-//      queries.map { query =>
-//        i += 1
-////        if (i ) {
-//          print("\r" + i)
-////        }
-//        query.id -> ScoredResult(doc.name, TermFrequencies.tfIdf(query.normalizedTokens, logtf, idf))
-//      }
-//    }.groupBy(_._1).map { case (id, scores) =>
-//      id -> scores.map(_._2).slidingBuffer(1000, 1000).flatMapIterable(top100).toList.flatMapIterable(top100)
-//    }
-//    result.toBlocking.foreach { case (id, results) =>
-//      results.toBlocking.foreach(println)
-//    }
+    val idf = TermFrequencies.idf(documentFrequency, tipsterCorpusIterator.size)
 
-
-    for (doc <- new ProgressIndicatorWrapper(tipster, nrDocs)) {
-      val logtf = TermFrequencies.logtf(doc.normalizedTokens)
+    println("Calculating queries")
+    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
+      val logtf = TermFrequencies.logtf(doc.terms)
       for (query <- queries) {
-        val tfIdf = TermFrequencies.tfIdf(query.normalizedTokens, logtf, idf)
+        val tfIdf = TermFrequencies.tfIdf(query.terms, logtf, idf)
         add(query.id, ScoredResult(doc.name, tfIdf))
       }
     }
   }
 
-  case class Query(queryTopic: Topic) {
-    @inline def id: Int = queryTopic.id
+  def scoreLanguageModel(): Unit = {
+    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
+    val lambda = 0.5
+    val cfSum = collectionFrequency.values.sum
+    println("Number of files in zips = " + tipsterCorpusIterator.size)
 
-    val normalizedTokens: Seq[String] = Normalizer.normalizeTokenList(Tokenizer.tokenize(queryTopic.title))
+
+    val queries = topics.map(Query)
+    val idf = TermFrequencies.idf(documentFrequency, tipsterCorpusIterator.size)
+
+    println("Calculating queries")
+    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
+      val tf = TermFrequencies.tf(doc.terms)
+      if (tf.values.sum == 0) {
+        println(doc.name)
+      }
+      for (query <- queries) {
+        var queryScore = 0d
+        for (term <- query.terms) {
+          val pHatwd = tf.getOrElse(term, 0) / tf.values.sum
+          val pwd = (1 - lambda) * pHatwd + lambda * (collectionFrequency.getOrElse(term, 0) + cfSum)
+          queryScore += pwd
+        }
+        add(query.id, ScoredResult(doc.name, queryScore))
+      }
+    }
   }
 
-  case class Topic(title: String, id: Int)
-
-  def getTopics(path: String): Seq[Topic] = {
-    val patternNumber = new Regex("Number: .+")
-    val patternTitle = new Regex("Topic: .+")
-
-    val topics = scala.io.Source.fromFile(path).mkString
-
-    val list = (patternNumber findAllIn topics).map(_.replace("Number: ", "")) zip (patternTitle findAllIn topics).map(_.replace("Topic: ", ""))
-    list.map(w => Topic(w._2.trim, w._1.trim.toInt)).toSeq
+  val (documentFrequency, collectionFrequency) = {
+    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
+    val documentFrequencyFile = new File(FilePathConfig.documentFrequencyFileName)
+    val collectionFrequencyFile = new File(FilePathConfig.collectionFrequencyFileName)
+    if (documentFrequencyFile.exists() && collectionFrequencyFile.exists()) {
+      println("Loading document & collection frequency tables from disk")
+      val dfFuture = Future {
+        val dis = new ObjectInputStream(new FileInputStream(documentFrequencyFile))
+        val documentFrequency = dis.readObject().asInstanceOf[scala.collection.Map[String, Int]]
+        dis.close()
+        documentFrequency
+      }
+      val cfFuture = Future {
+        val cis = new ObjectInputStream(new FileInputStream(collectionFrequencyFile))
+        val collectionFrequency = cis.readObject().asInstanceOf[scala.collection.Map[String, Int]]
+        cis.close()
+        collectionFrequency
+      }
+      val result = (Await.result(dfFuture, Duration.Inf),
+          Await.result(cfFuture, Duration.Inf))
+      println("Done")
+      result
+    } else {
+      println("Generating document & collection frequency table")
+      val documentFrequency = mutable.Map[String, Int]()
+      val collectionFrequency = mutable.Map[String, Int]()
+      val corpus = new ProgressIndicatorWrapper[TipsterDocument](tipsterCorpusIterator)
+//      val frequencies = for {
+//        group <- Observable.from(corpus).flatMapIterable(_.terms).groupBy(identity)
+//        count <- group._2.subscribeOn(ComputationScheduler()).size
+//      } yield (group._1, count)
+//      val documentFrequency = frequencies.toBlocking.toIterable.toMap
+      corpus.foreach { doc =>
+        doc.terms.foreach { token =>
+          collectionFrequency(token) = collectionFrequency.getOrElse(token, 0) + 1
+        }
+        doc.terms.distinct.foreach { token =>
+          documentFrequency(token) = documentFrequency.getOrElse(token, 0) + 1
+        }
+      }
+      val dos = new ObjectOutputStream(new FileOutputStream(documentFrequencyFile))
+      dos.writeObject(documentFrequency)
+      dos.close()
+      val cos = new ObjectOutputStream(new FileOutputStream(collectionFrequencyFile))
+      cos.writeObject(collectionFrequency)
+      cos.close()
+      (documentFrequency, collectionFrequency)
+    }
   }
 
-  def displayTopicResults(topics: Seq[Topic]): Unit = {
+  def displayTopicResults(benchmarks: Map[Int, Set[String]]): Unit = {
     for (topic <- topics) {
-      val resultList = queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title).zipWithIndex.map(w => (w._1, w._2 + 1))
-      for (result <- resultList) {
-        println(topic.id + " " + result._2 + " " + result._1)
+      val benchmark = benchmarks.getOrElse(topic.id, Set())
+      val resultList = queryHeaps(topic.id).toList.sortBy(-_.score)
+      for ((result, index) <- resultList.zipWithIndex) {
+        println(topic.id + " " + (index + 1) + " " + result.title + "\t" + benchmark.contains(result.title))
       }
     }
   }
@@ -134,8 +165,9 @@ object RetrievalSystem {
     val resultMap = collection.mutable.Map[Int, Set[String]]()
     for (line <- lines) {
       if (line.endsWith("1")) {
-        val topicId = line.split(" ")(0).toInt
-        var fileId = line.split(" ")(2).replace("-", "")
+        val parts = line.split(" ")
+        val topicId = parts(0).toInt
+        var fileId = parts(2).replace("-", "")
         var newSet = resultMap.getOrElse(topicId, Set[String]())
         newSet += fileId
         resultMap(topicId) = newSet
@@ -146,9 +178,9 @@ object RetrievalSystem {
     resultMap.toMap
   }
 
-  def evaluate(benchmark: Map[Int, Set[String]], topicList: Seq[Topic]): Unit = {
+  def evaluate(benchmark: Map[Int, Set[String]]): Unit = {
     var map = 0.0
-    for (topic <- topicList) {
+    for (topic <- topics) {
       val predicted = queryHeaps(topic.id).map(_.title).toSet
       var actual = benchmark(topic.id) & predicted
       val originalSize = benchmark(topic.id).size
@@ -162,17 +194,24 @@ object RetrievalSystem {
       map += ap
       println(pr + ", F-score :" + f)
     }
-    println("Map: ", map / topicList.size)
-
+    println("Map: ", map / topics.size)
   }
 
   def main(args: Array[String]) {
-    val benchmark = readBenchmarkData("/Users/david/Downloads/IR2015/tipster/qrels")
-    val topics = getTopics("/Users/david/Downloads/IR2015/tipster/topics")
-    RetrievalSystem.score("alldocs.dat", topics)
-//    RetrievalSystem.score("/Users/david/Downloads/IR2015/tipster/zips", topics)
-    displayTopicResults(topics)
-    evaluate(benchmark, topics)
+    val benchmark = readBenchmarkData(FilePathConfig.qrels)
+//    scoreTfIdf()
+    scoreLanguageModel()
+    displayTopicResults(benchmark)
+    evaluate(benchmark)
   }
 
+  case class ScoredResult(title: String, score: Double)
+
+  case class Query(queryTopic: Topic) {
+    @inline def id: Int = queryTopic.id
+
+    val terms: Seq[String] = {
+      termExtractor.extractTokens(queryTopic.title) //++ termExtractor.extractTokens(queryTopic.concepts)
+    }
+  }
 }

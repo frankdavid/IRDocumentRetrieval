@@ -2,6 +2,7 @@ package ch.ethz.ir.project2
 
 class ProgressIndicatorWrapper[T](wrapped: Iterator[T], size: Int) extends Iterator[T] {
 
+  def this(wrapped: Iterator[T]) = this(wrapped, wrapped.size)
   var progress = 0
   val started = System.currentTimeMillis()
 
@@ -38,5 +39,9 @@ class ProgressIndicatorWrapper[T](wrapped: Iterator[T], size: Int) extends Itera
   def next() = {
     increment()
     wrapped.next()
+  }
+
+  override def toIterable = new Iterable[T] {
+    def iterator = ProgressIndicatorWrapper.this
   }
 }

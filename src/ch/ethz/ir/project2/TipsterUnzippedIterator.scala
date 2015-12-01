@@ -8,6 +8,7 @@ class TipsterUnzippedIterator(fileName: String) extends AbstractIterator[Tipster
   private val inputStream = new ObjectInputStream(new FileInputStream(fileName))
   private var _hasNext = true
   private var nextElem: TipsterDocument = _
+  override val size = inputStream.readInt()
 
   readNext()
 
