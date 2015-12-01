@@ -10,7 +10,7 @@ object FilePathConfig {
 
   val qrels = "/Users/david/Downloads/IR2015/tipster/qrels"
 
-  val frequencyPath = ""
+  val frequencyPath = "data/"
 
   def documentFrequencyFileName(implicit termExtractor: TermExtractor): String = {
     frequencyPath + "/df" + termExtractorFileName + ".dat"

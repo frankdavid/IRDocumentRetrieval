@@ -5,10 +5,7 @@ import java.io._
 import ch.ethz.dal.tinyir.lectures.{PrecisionRecall, TermFrequencies}
 
 import scala.collection.mutable
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 import scala.util.matching.Regex
-import scala.concurrent.ExecutionContext.Implicits.global
 
 object RetrievalSystem {
 
@@ -74,28 +71,26 @@ object RetrievalSystem {
 
   def scoreLanguageModel(): Unit = {
     val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
-    val lambda = 0.5
-    val cfSum = collectionFrequency.values.sum
+    val lambda = 0.0d
+    val cfSum = collectionFrequency.values.sum.toDouble
     println("Number of files in zips = " + tipsterCorpusIterator.size)
 
 
     val queries = topics.map(Query)
-    val idf = TermFrequencies.idf(documentFrequency, tipsterCorpusIterator.size)
-
-    println("Calculating queries")
+    println("Calculating queries logtf lambda=" + lambda)
     for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
       val tf = TermFrequencies.tf(doc.terms)
-      if (tf.values.sum == 0) {
-        println(doc.name)
-      }
-      for (query <- queries) {
-        var queryScore = 0d
-        for (term <- query.terms) {
-          val pHatwd = tf.getOrElse(term, 0) / tf.values.sum
-          val pwd = (1 - lambda) * pHatwd + lambda * (collectionFrequency.getOrElse(term, 0) + cfSum)
-          queryScore += pwd
+      val tfSum = tf.values.sum.toDouble
+      if (tfSum > 0) {
+        for (query <- queries) {
+          var queryScore = 0d
+          for (term <- query.terms) {
+            val pHatwd = tf.getOrElse(term, 0) / tfSum
+            val pwd = (1 - lambda) * pHatwd + lambda * (collectionFrequency.getOrElse(term, 0) / cfSum)
+            queryScore += pwd
+          }
+          add(query.id, ScoredResult(doc.name, queryScore))
         }
-        add(query.id, ScoredResult(doc.name, queryScore))
       }
     }
   }
@@ -106,20 +101,20 @@ object RetrievalSystem {
     val collectionFrequencyFile = new File(FilePathConfig.collectionFrequencyFileName)
     if (documentFrequencyFile.exists() && collectionFrequencyFile.exists()) {
       println("Loading document & collection frequency tables from disk")
-      val dfFuture = Future {
+      val dfFuture =/* Future */{
         val dis = new ObjectInputStream(new FileInputStream(documentFrequencyFile))
         val documentFrequency = dis.readObject().asInstanceOf[scala.collection.Map[String, Int]]
         dis.close()
         documentFrequency
       }
-      val cfFuture = Future {
+      val cfFuture = /*Future */{
         val cis = new ObjectInputStream(new FileInputStream(collectionFrequencyFile))
         val collectionFrequency = cis.readObject().asInstanceOf[scala.collection.Map[String, Int]]
         cis.close()
         collectionFrequency
       }
-      val result = (Await.result(dfFuture, Duration.Inf),
-          Await.result(cfFuture, Duration.Inf))
+      val result = (/*Await.result(*/dfFuture/*, Duration.Inf)*/,
+          /*Await.result(*/cfFuture/*, Duration.Inf)*/)
       println("Done")
       result
     } else {
