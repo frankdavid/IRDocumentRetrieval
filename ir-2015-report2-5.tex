@@ -35,14 +35,49 @@ Each document is preprocessed in the following 3 steps:
 \section{Models}
 
 \subsection{Term model (tf-idf)}
-
+This requires two iterations over the document collection.
+\begin{itemize}
+	\item
+	We extract document frequency data for all stems. We optimized this step in order to decrease the runtime (see section Optimization). TODO: 2 stems? 
+	\item 
+	We calculate tfIdf(d) as
+	$\sum_{w\in query} \log(tf(w, d) + 1) * \log(n)-log(df(w))$
+	
+	For the implementation, see the class \texttt{TfIdfModel}.
+\end{itemize}
 
 \subsection{Language model with Jelinek-Mercer smoothing}
+
+
 
 \subsection{A failed attempt: Factored language model}
 We also implemented a variant of the factored language model using the Stanford Part-Of-Speech tagger library, however unfortunately we had to recognize in our tests that tagging of the entire document collection would take more than a week.
 
-\section{Optimizations}
+\section{Our system}
+
+We implemented a system that can evaluate many models in parallel, and we tested it on a machine with 16 cores and 100GB of memory. 
+We used \textit{sbt} for building.
+
+The following steps are required to run the application:
+\begin{itemize}
+	\item Specify file paths in \texttt{FilePathConfig.scala}
+	\item Specify the models to be tested in \texttt{RetrievalSystem.scala}'s main method.
+	\item Run \texttt{Exporter} (this is required only once to export the corpus into a single file).
+	\item Run \texttt{RetrievalSystem}.
+
+\end{itemize}
+The following command will list all available applications, and then makes it possible to select and run a specific application:\\
+
+{\centering
+\texttt{env JAVA\_OPTS="-Xmx6G" sbt run} \par
+}
+
+The memory requirement of the application depends on the number of parallel tests and the algorithm parameters.
+
+
+
+\vspace{0.5cm}
+\textbf{Optimizations} \\
 For more effective running, we optimized our implementation in the following ways:
 \begin{itemize}
 	\item Copy all documents in a single file which is read sequentially.

@@ -11,19 +11,20 @@ class TfIdfModel(val maxWindowSize: Int) extends Model {
     val topics = modelInput.topics
     val documentFrequency = modelInput.documentFrequency
     val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
-    println("Number of files in zips = " + tipsterCorpusIterator.size)
-    val queries = topics.map(Query(_)(termExtractor))
+    val queries = topics.map(Query(_, maxWindowSize)(termExtractor))
     val idf = TermFrequencies.idf(documentFrequency, tipsterCorpusIterator.size)
 
-    println("Calculating queries")
-    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
+    var progressInt = 0
+    for (doc <- tipsterCorpusIterator) {
       val logtf = TermFrequencies.logtf(doc.terms(maxWindowSize))
       for (query <- queries) {
         val tfIdf = TermFrequencies.tfIdf(query.terms, logtf, idf)
         add(query.id, ScoredResult(doc.name, tfIdf))
       }
+      progressInt += 1
+      progress = progressInt / tipsterCorpusIterator.size.toDouble
     }
   }
 
-  abstract def name = s"tfidf$maxWindowSize"
+  val name = s"tfidf$maxWindowSize"
 }

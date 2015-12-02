@@ -5,7 +5,7 @@ import scala.io.StdIn
 object ShowContent {
 
   def main(args: Array[String]) {
-    implicit val termExtractor = TermExtractor(shouldStem = true, shouldSplit = true, maxWindowSize = 3)
+    implicit val termExtractor = TermExtractor(shouldStem = true, shouldSplit = true)
     val docName = StdIn.readLine()
     val result = new TipsterUnzippedIterator("alldocs.dat").collectFirst {
       case d if d.name == docName => d

@@ -43,10 +43,10 @@ case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean) {
 
   def extractTokens(string: String, maxWindowSize: Int = 1): Seq[String] = {
     val tokens = Tokenizer.tokenize(string)
-    extractTokens(tokens)
+    extractTokens(tokens, maxWindowSize)
   }
 
-  def extractTokens(tokens: Seq[String], maxWindowSize: Int = 1): Seq[String] = {
+  def extractTokens(tokens: Seq[String], maxWindowSize: Int): Seq[String] = {
     val split = if (shouldSplit) tokens.flatMap(splitIntoWords) else tokens
     val filtered = stopWords.filter(split)
 

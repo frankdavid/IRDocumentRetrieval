@@ -5,14 +5,15 @@ import ch.ethz.ir.project2.RetrievalSystem.Query
 
 class JelinekMercerSmoothingLanguageModel(lambda: Double) extends Model {
 
-  val termExtractor = TermExtractor(shouldSplit = true, shouldStem = true)
+  implicit val termExtractor = TermExtractor(shouldSplit = true, shouldStem = true)
 
   def score(input: ModelInput): Unit = {
     val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
     val cfSum = input.collectionFrequency.values.sum.toDouble
 
-    val queries = input.topics.map(Query(_)(termExtractor))
-    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
+    val queries = input.topics.map(Query(_, 1)(termExtractor))
+    var progressInt = 0
+    for (doc <- tipsterCorpusIterator) {
       val docTerms = doc.terms(1)
       val docTermsSet = docTerms.toSet
       val tf = TermFrequencies.tf(docTerms)
@@ -28,8 +29,10 @@ class JelinekMercerSmoothingLanguageModel(lambda: Double) extends Model {
           add(query.id, ScoredResult(doc.name, sumlogPwd))
         }
       }
+      progressInt += 1
+      progress = progressInt / tipsterCorpusIterator.size.toDouble
     }
   }
 
-  abstract def name = s"jm-$lambda"
+  val name = s"jm-$lambda"
 }

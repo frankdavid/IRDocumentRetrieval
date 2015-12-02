@@ -11,11 +11,11 @@ abstract class Model {
 
   val queryHeaps = scala.collection.mutable.Map[Int, mutable.PriorityQueue[ScoredResult]]()
 
-  abstract def score(input: ModelInput): Unit
+  def score(input: ModelInput): Unit
 
-  abstract def name: String
+  def name: String
 
-  abstract val termExtractor: TermExtractor
+  val termExtractor: TermExtractor
 
   var progress: Double = 0.0
 
@@ -31,26 +31,28 @@ abstract class Model {
     val topics = input.topics
     val benchmarks = input.benchmarks
     val report = new PrintWriter(new File(input.outputDir, s"$name-report"))
-    val performancePerQuery = topics.sortBy(_.id).map { topic =>
+    val performancePerQuery = topics.sortBy(_.id).flatMap { topic =>
       val predicted = queryHeaps(topic.id).map(_.title).toSet
-      val actual = benchmarks(topic.id)
-      val pr = PrecisionRecall.evaluate(predicted, actual)
-      val f = FScore.evaluate(predicted, actual)
-      val ap = AveragePrecision.evaluate(queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title), actual)
-      topic -> PerformanceScore(pr.precision, pr.recall, f, ap)
+      benchmarks.get(topic.id).map { actual =>
+        val pr = PrecisionRecall.evaluate(predicted, actual)
+        val f = FScore.evaluate(predicted, actual)
+        val ap = AveragePrecision.evaluate(queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title), actual)
+        topic -> PerformanceScore(pr.precision, pr.recall, f, ap)
+      }
     }
     performancePerQuery.foreach { case (topic, perf) =>
       report.println(s"${topic.id} ${topic.title}:")
       report.println(s"\tprec=${perf.precision} recall=${perf.precision} f-score=${perf.f1} ap=${perf.averagePrecision}")
     }
     val avgPerf = PerformanceScore(
-      precision = performancePerQuery.map(_._2.precision).sum / topics.size,
-      recall = performancePerQuery.map(_._2.recall).sum / topics.size,
-      f1 = performancePerQuery.map(_._2.f1).sum / topics.size,
-      averagePrecision = performancePerQuery.map(_._2.averagePrecision).sum / topics.size
+      precision = performancePerQuery.map(_._2.precision).sum / performancePerQuery.size,
+      recall = performancePerQuery.map(_._2.recall).sum / performancePerQuery.size,
+      f1 = performancePerQuery.map(_._2.f1).sum / performancePerQuery.size,
+      averagePrecision = performancePerQuery.map(_._2.averagePrecision).sum / performancePerQuery.size
     )
     report.println("Mean:")
     report.println(s"\tprec=${avgPerf.precision} recall=${avgPerf.precision} f-score=${avgPerf.f1} map=${avgPerf.averagePrecision}")
+    report.close()
     avgPerf
   }
 

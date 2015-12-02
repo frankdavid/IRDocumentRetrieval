@@ -117,6 +117,7 @@ object RetrievalSystem {
         cis.close()
         collectionFrequency
       }
+      println("done")
       (df, cf)
     } else {
       println("Generating document & collection frequency table")
@@ -137,6 +138,7 @@ object RetrievalSystem {
       val cos = new ObjectOutputStream(new FileOutputStream(collectionFrequencyFile))
       cos.writeObject(collectionFrequency)
       cos.close()
+      println("done")
       (documentFrequency, collectionFrequency)
     }
 
@@ -164,10 +166,11 @@ object RetrievalSystem {
   def main(args: Array[String]) {
     val models = Seq(new TfIdfModel(1), new TfIdfModel(2), new JelinekMercerSmoothingLanguageModel(0.3),
       new JelinekMercerSmoothingLanguageModel(0.5), new JelinekMercerSmoothingLanguageModel(0.8))
-    val date = new SimpleDateFormat("YMd_Hms").format(new Date())
+
+    val date = new SimpleDateFormat("YYYYMMdd_HHmmss").format(new Date())
     val outputDir = new File(s"output/$date")
     outputDir.mkdirs()
-    val frequencyFutures = models.map(_.termExtractor).toSet.map { termExtractor =>
+    val frequencyFutures = models.map(_.termExtractor).toSet.map { termExtractor: TermExtractor =>
       Future {
         termExtractor -> documentCollectionFrequency(termExtractor)
       }
@@ -193,30 +196,27 @@ object RetrievalSystem {
       }
     }
     Future {
-      print("\r")
       while(true) {
+        print("\r")
         models.foreach { model =>
           val progress = (model.progress * 1000).toInt / 10.0
-          print(s"${model.name}:$progress%\t")
+          print(s"${model.name}: $progress%   ")
         }
         Thread.sleep(2000)
       }
     }
     val result = Await.result(Future.sequence(resultFutures), Duration.Inf)
-    val best = result.maxBy(_._2.averagePrecision)
-    println(best)
+    result.foreach(println)
   }
 
 
-  case class Query(queryTopic: Topic)(implicit termExtractor: TermExtractor) {
+  case class Query(queryTopic: Topic, maxWindowSize: Int)(implicit termExtractor: TermExtractor) {
     @inline def id: Int = queryTopic.id
 
     val terms: Seq[String] = {
-      termExtractor.extractTokens(queryTopic.title) //++ termExtractor.extractTokens(queryTopic.concepts)
+      termExtractor.extractTokens(queryTopic.title, maxWindowSize) //++ termExtractor.extractTokens(queryTopic.concepts)
     }
 
     val termsSet = terms.toSet
-
-//    lazy val
   }
 }
