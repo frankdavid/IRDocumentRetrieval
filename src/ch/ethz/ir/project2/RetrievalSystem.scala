@@ -1,30 +1,30 @@
 package ch.ethz.ir.project2
 
 import java.io._
+import java.text.SimpleDateFormat
+import java.util.Date
 
-import ch.ethz.dal.tinyir.lectures.{PrecisionRecall, TermFrequencies}
 import edu.stanford.nlp.tagger.maxent.MaxentTagger
 
-import scala.collection.mutable
-import scala.util.matching.Regex
+import scala.collection
 import scala.collection.JavaConversions._
+import scala.collection.immutable.IndexedSeq
+import scala.collection.mutable
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
+import scala.util.matching.Regex
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object RetrievalSystem {
 
-  implicit val termExtractor = TermExtractor(shouldStem = true, shouldSplit = true, maxWindowSize = 1)
+  val benchmarks: Map[Int, Set[String]] = readBenchmarkData(FilePathConfig.qrels)
 
-  val queryHeaps = scala.collection.mutable.Map[Int, mutable.PriorityQueue[ScoredResult]]()
-
-  val benchmarks = readBenchmarkData(FilePathConfig.qrels)
-
-  val topics = {
+  val topics: IndexedSeq[Topic] = {
     val numberRegex = new Regex("Number: ([^<]+)")
     val titleRegex = new Regex("Topic: ([^<]+)")
     val conceptRegex = new Regex("(?s)Concept\\(s\\):([^<]+)")
 
     val topicsString = scala.io.Source.fromFile(FilePathConfig.topics).mkString
-
-//    val list = (numberRegex findAllIn topicsString).map(_.replace("Number: ", "")) zip (titleRegex findAllIn topicsString).map(_.replace("Topic: ", ""))
 
     val numbers = numberRegex.findAllMatchIn(topicsString).map(_.group(1))
     val titles = titleRegex.findAllMatchIn(topicsString).map(_.group(1))
@@ -42,67 +42,6 @@ object RetrievalSystem {
     topics.toIndexedSeq
   }
 
-  def score(res: ScoredResult) = -res.score
-
-  def add(id: Int, res: ScoredResult): Boolean = {
-    val heap = queryHeaps.getOrElseUpdate(id, new mutable.PriorityQueue[ScoredResult]()(Ordering.by(score)))
-    if (heap.size < 100) {
-      // heap not full
-      heap += res
-      true
-    } else if (heap.head.score < res.score) {
-      heap.dequeue
-      heap += res
-      true
-    } else false
-  }
-
-  def scoreTfIdf(): Unit = {
-    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
-    println("Number of files in zips = " + tipsterCorpusIterator.size)
-    val queries = topics.map(Query(_)(termExtractor))
-    val idf = TermFrequencies.idf(documentFrequency, tipsterCorpusIterator.size)
-
-    println("Calculating queries")
-    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
-      val logtf = TermFrequencies.logtf(doc.terms)
-      for (query <- queries) {
-        val tfIdf = TermFrequencies.tfIdf(query.terms, logtf, idf)
-        add(query.id, ScoredResult(doc.name, tfIdf))
-      }
-    }
-  }
-
-  def scoreLanguageModelWithJelinekMercer(): Unit = {
-    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
-    @inline def lambda(docTerms: Set[String]) = { 0.5
-//      val t = docTerms.size / 500
-//      0.8 - 0.8 * (1 / (1 + math.exp(-t)))
-    }
-    val cfSum = collectionFrequency.values.sum.toDouble
-    println("Number of files in zips = " + tipsterCorpusIterator.size)
-
-
-    val queries = topics.map(Query(_)(termExtractor))
-    println(s"Calculating queries lambda = ${lambda(null)}")
-    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
-      val docTerms = doc.terms
-      val docTermsSet = doc.terms.toSet
-      val tf = TermFrequencies.tf(docTerms)
-      val tfSum = tf.values.sum.toDouble
-      if (tfSum > 0) {
-        for (query <- queries) {
-          var sumlogPwd = math.log(lambda(docTermsSet))
-          for (term <- docTermsSet.intersect(query.termsSet)) {
-            val pHatwd = tf.getOrElse(term, 0) / tfSum
-            val pw = collectionFrequency.getOrElse(term, 0) / cfSum
-            sumlogPwd += math.log(1 + (1 - lambda(docTermsSet)) / lambda(docTermsSet) * pHatwd / pw)
-          }
-          add(query.id, ScoredResult(doc.name, sumlogPwd))
-        }
-      }
-    }
-  }
 
   def scoreFactoredLanguageModel(): Unit = {
     val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
@@ -160,45 +99,35 @@ object RetrievalSystem {
 //    }
 //  }
 
-//  var  documentFrequency: Map[String, Int] = null
-//  var collectionFrequency: Map[String, Int] = null
-  val (documentFrequency, collectionFrequency) = {
+  def documentCollectionFrequency(implicit termExtractor: TermExtractor) = {
     val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
     val documentFrequencyFile = new File(FilePathConfig.documentFrequencyFileName)
     val collectionFrequencyFile = new File(FilePathConfig.collectionFrequencyFileName)
     if (documentFrequencyFile.exists() && collectionFrequencyFile.exists()) {
       println("Loading document & collection frequency tables from disk")
-      val dfFuture =/* Future */{
+      val df =  {
         val dis = new ObjectInputStream(new FileInputStream(documentFrequencyFile))
         val documentFrequency = dis.readObject().asInstanceOf[scala.collection.Map[String, Int]]
         dis.close()
         documentFrequency
       }
-      val cfFuture = /*Future */{
+      val cf = {
         val cis = new ObjectInputStream(new FileInputStream(collectionFrequencyFile))
         val collectionFrequency = cis.readObject().asInstanceOf[scala.collection.Map[String, Int]]
         cis.close()
         collectionFrequency
       }
-      val result = (/*Await.result(*/dfFuture/*, Duration.Inf)*/,
-          /*Await.result(*/cfFuture/*, Duration.Inf)*/)
-      println("Done")
-      result
+      (df, cf)
     } else {
       println("Generating document & collection frequency table")
       val documentFrequency = mutable.Map[String, Int]()
       val collectionFrequency = mutable.Map[String, Int]()
       val corpus = new ProgressIndicatorWrapper[TipsterDocument](tipsterCorpusIterator)
-//      val frequencies = for {
-//        group <- Observable.from(corpus).flatMapIterable(_.terms).groupBy(identity)
-//        count <- group._2.subscribeOn(ComputationScheduler()).size
-//      } yield (group._1, count)
-//      val documentFrequency = frequencies.toBlocking.toIterable.toMap
       corpus.foreach { doc =>
-        doc.terms.foreach { token =>
+        doc.terms(2).foreach { token =>
           collectionFrequency(token) = collectionFrequency.getOrElse(token, 0) + 1
         }
-        doc.terms.distinct.foreach { token =>
+        doc.terms(2).distinct.foreach { token =>
           documentFrequency(token) = documentFrequency.getOrElse(token, 0) + 1
         }
       }
@@ -210,18 +139,9 @@ object RetrievalSystem {
       cos.close()
       (documentFrequency, collectionFrequency)
     }
+
   }
 
-  def displayTopicResults(printWriter: PrintWriter): Unit = {
-    for (topic <- topics) {
-      val benchmark = benchmarks.getOrElse(topic.id, Set())
-      val resultList = queryHeaps(topic.id).toList.sortBy(-_.score)
-      for ((result, index) <- resultList.zipWithIndex) {
-        printWriter.println(topic.id + " " + (index + 1) + " " + result.title)
-        println(topic.id + " " + (index + 1) + " " + result.title + "\t" + benchmark.contains(result.title))
-      }
-    }
-  }
 
   def readBenchmarkData(path: String): Map[Int, Set[String]] = {
     val lines = scala.io.Source.fromFile(path).mkString.split("\n")
@@ -241,40 +161,52 @@ object RetrievalSystem {
     resultMap.toMap
   }
 
-  def evaluate(): Unit = {
-    val performancePerQuery = topics.sortBy(_.id).map { topic =>
-      val predicted = queryHeaps(topic.id).map(_.title).toSet
-      val actual = benchmarks(topic.id)
-      val pr = PrecisionRecall.evaluate(predicted, actual)
-      val f = FScore.evaluate(predicted, actual)
-      val ap = AveragePrecision.evaluate(queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title), actual)
-      topic -> PerformanceScore(pr.precision, pr.recall, f, ap)
-    }
-    performancePerQuery.foreach { case (topic, perf) =>
-      println(s"${topic.id} ${topic.title}:")
-      println(s"\tprec=${perf.precision} recall=${perf.precision} f-score=${perf.f1} ap=${perf.averagePrecision}")
-    }
-    val avgPerf = PerformanceScore(
-      precision = performancePerQuery.map(_._2.precision).sum / topics.size,
-      recall = performancePerQuery.map(_._2.recall).sum / topics.size,
-      f1 = performancePerQuery.map(_._2.f1).sum / topics.size,
-      averagePrecision = performancePerQuery.map(_._2.averagePrecision).sum / topics.size
-    )
-    println("Mean:")
-    println(s"\tprec=${avgPerf.precision} recall=${avgPerf.precision} f-score=${avgPerf.f1} map=${avgPerf.averagePrecision}")
-  }
-
   def main(args: Array[String]) {
-//    scoreTfIdf()
-    scoreLanguageModelWithJelinekMercer()
-//    scoreFactoredLanguageModel()
-    val writer = new PrintWriter("ranking-l-5.run")
-    displayTopicResults(writer)
-    writer.close()
-    evaluate()
+    val models = Seq(new TfIdfModel(1), new TfIdfModel(2), new JelinekMercerSmoothingLanguageModel(0.3),
+      new JelinekMercerSmoothingLanguageModel(0.5), new JelinekMercerSmoothingLanguageModel(0.8))
+    val date = new SimpleDateFormat("YMd_Hms").format(new Date())
+    val outputDir = new File(s"output/$date")
+    outputDir.mkdirs()
+    val frequencyFutures = models.map(_.termExtractor).toSet.map { termExtractor =>
+      Future {
+        termExtractor -> documentCollectionFrequency(termExtractor)
+      }
+    }
+    val frequenciesFuture = Future.sequence(frequencyFutures)
+    val frequencies = Await.result(frequenciesFuture, Duration.Inf)
+    val documentFrequencies = mutable.Map[TermExtractor, collection.Map[String, Int]]()
+    val collectionFrequencies = mutable.Map[TermExtractor, collection.Map[String, Int]]()
+    for ((termExtractor, (df, cf)) <- frequencies) {
+      documentFrequencies(termExtractor) = df
+      collectionFrequencies(termExtractor) = cf
+    }
+    val input = ModelInput(
+      documentFrequencies = documentFrequencies,
+      collectionFrequencies = collectionFrequencies,
+      benchmarks = benchmarks,
+      topics = topics,
+      outputDir = outputDir
+    )
+    val resultFutures = models.map { model =>
+      Future {
+        model -> model.run(input)
+      }
+    }
+    Future {
+      print("\r")
+      while(true) {
+        models.foreach { model =>
+          val progress = (model.progress * 1000).toInt / 10.0
+          print(s"${model.name}:$progress%\t")
+        }
+        Thread.sleep(2000)
+      }
+    }
+    val result = Await.result(Future.sequence(resultFutures), Duration.Inf)
+    val best = result.maxBy(_._2.averagePrecision)
+    println(best)
   }
 
-  case class ScoredResult(title: String, score: Double)
 
   case class Query(queryTopic: Topic)(implicit termExtractor: TermExtractor) {
     @inline def id: Int = queryTopic.id

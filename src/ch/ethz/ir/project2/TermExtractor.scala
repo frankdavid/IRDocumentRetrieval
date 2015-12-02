@@ -5,7 +5,7 @@ import ch.ethz.dal.tinyir.processing.{Tokenizer, StopWords}
 import scala.collection.mutable
 import scala.io.Source
 
-case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean, maxWindowSize: Int) {
+case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean) {
 
   private val stopWords = new StopWords()
 
@@ -41,12 +41,12 @@ case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean, maxWindowSiz
     }.getOrElse(Seq(string))
   }
 
-  def extractTokens(string: String): Seq[String] = {
+  def extractTokens(string: String, maxWindowSize: Int = 1): Seq[String] = {
     val tokens = Tokenizer.tokenize(string)
     extractTokens(tokens)
   }
 
-  def extractTokens(tokens: Seq[String]): Seq[String] = {
+  def extractTokens(tokens: Seq[String], maxWindowSize: Int = 1): Seq[String] = {
     val split = if (shouldSplit) tokens.flatMap(splitIntoWords) else tokens
     val filtered = stopWords.filter(split)
 
@@ -61,8 +61,8 @@ case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean, maxWindowSiz
     }
 
     val lowered = stemmed.map(_.filter(_.isLetter).toLowerCase)
-    if (/*max*/maxWindowSize > 1) {
-      (for (/*windowSize <- 1 to maxWindowSize;*/ window <- lowered.sliding(maxWindowSize)) yield window.mkString(" ")).toSeq
+    if (maxWindowSize > 1) {
+      (for (windowSize <- 1 to maxWindowSize; window <- lowered.sliding(maxWindowSize)) yield window.mkString(" ")).toSeq
     } else {
       lowered
     }

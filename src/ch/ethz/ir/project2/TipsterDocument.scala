@@ -11,7 +11,7 @@ class TipsterDocument(val body: String, val name: String) extends Document with 
 
   def content = body
 
-  def terms(implicit termExtractor: TermExtractor): Seq[String] = termExtractor.extractTokens(content)
+  def terms(maxWindowSize: Int = 1)(implicit termExtractor: TermExtractor): Seq[String] = termExtractor.extractTokens(content, maxWindowSize)
 }
 
 object TipsterDocument {

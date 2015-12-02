@@ -28,7 +28,7 @@ object FilePathConfig {
     if (termExtractor.shouldSplit) {
       name += "_split"
     }
-    name += termExtractor.maxWindowSize
+    name += "2"
     name
   }
 }
