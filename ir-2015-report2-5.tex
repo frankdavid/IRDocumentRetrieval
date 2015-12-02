@@ -1,0 +1,52 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+%\usepackage{helvet}
+\usepackage{graphicx}
+\renewcommand{\familydefault}{\sfdefault}
+\begin{document}
+\begin{center}
+
+{\Huge Information Retrieval Assignment 2} \\
+\vspace{.5cm}
+{\large Group 5 (Dávid Frank, Ferenc Galkó, Zalán Borsos)}
+\end{center}
+
+\vspace{1cm}
+
+\section{Preprocessing}
+Each document is preprocessed in the following 3 steps:
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\linewidth]{preprocess}
+\end{figure}
+
+\begin{itemize}
+	\item Tokenization: \\
+	As the first step, we split the document into a stream of words. We split on whitespace characters and punctuation marks.
+	
+	\item Splitting: \\
+	Unfortunately spaces are frequently missing in the document collection. To overcome this issue, we have implemented a splitting mechanism, which attempts to split meaningless words into two existing words using a dictionary.
+	\item Stemming: \\
+	For improved results, we apply stemming to the words. Unfortunately we experienced utterly bad performance with the provided PorterStemmer, for this reason we decided for another implementation, also used by the famous Lucene search engine.
+	
+\end{itemize}
+
+
+\section{Models}
+
+\subsection{Term model (tf-idf)}
+
+
+\subsection{Language model with Jelinek-Mercer smoothing}
+
+\subsection{A failed attempt: Factored language model}
+We also implemented a variant of the factored language model using the Stanford Part-Of-Speech tagger library, however unfortunately we had to recognize in our tests that tagging of the entire document collection would take more than a week.
+
+\section{Optimizations}
+For more effective running, we optimized our implementation in the following ways:
+\begin{itemize}
+	\item Copy all documents in a single file which is read sequentially.
+	\item Cache document \& collection frequencies between restarts.
+\end{itemize}
+
+\end{document}

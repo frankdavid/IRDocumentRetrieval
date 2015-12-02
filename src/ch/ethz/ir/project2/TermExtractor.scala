@@ -61,8 +61,8 @@ case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean, maxWindowSiz
     }
 
     val lowered = stemmed.map(_.filter(_.isLetter).toLowerCase)
-    if (maxWindowSize > 1) {
-      for (windowSize <- 1 to maxWindowSize; window <- lowered.sliding(windowSize)) yield window.mkString(" ")
+    if (/*max*/maxWindowSize > 1) {
+      (for (/*windowSize <- 1 to maxWindowSize;*/ window <- lowered.sliding(maxWindowSize)) yield window.mkString(" ")).toSeq
     } else {
       lowered
     }
