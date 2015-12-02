@@ -1,12 +1,14 @@
 package ch.ethz.dal.tinyir.io
 
+import util.Try
+import util.Failure
+import util.Success
+import io.Source
+import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipFile
-
-import rx.lang.scala.Observable
-
+import java.util.zip.ZipEntry
 import scala.collection.JavaConversions._
-import scala.util.{Failure, Success, Try}
 
 // create a document stream out of all files in a given zip file 
 //
@@ -14,17 +16,17 @@ class ZipStream (path: String, extension: String = "")
 extends DirStream (path,extension) {
 
   override def length : Int = openZipFile(path) match {
-    case Success(z) =>  z.entries.count(e => isValid(e.getName))
+    case Success(z) =>  z.entries.filter(e => isValid(e.getName)).length
     case _ => 0
   }
     
-  override def stream: Observable[InputStream] = openZipFile(path) match {
-    case Failure(zip) => Observable.empty
+  override def stream : Stream[InputStream] = openZipFile(path) match {
+    case Failure(zip) => Stream[InputStream]() 
     case Success(zip) => {
       val entries = zip.entries.toList
       val filtered = entries.filter(e => isValid(e.getName))
-      val sorted  = Observable.from(filtered.sortBy(_.getName))
-      sorted.map(zip.getInputStream)
+      val sorted  = filtered.sortBy(_.getName).toStream
+      sorted.map(zip.getInputStream(_))
     }
   }
   

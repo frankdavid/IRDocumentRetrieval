@@ -2,8 +2,6 @@ package ch.ethz.dal.tinyir.io
 
 import java.io.{File, InputStream}
 
-import rx.lang.scala.Observable
-
 // create a document stream out of all files in a all zip files
 // that are found in a given directory
 //
@@ -17,8 +15,8 @@ extends DirStream (dirpath,extension) {
     ziplist.map(new ZipStream(_,extension).stream).reduceLeft(_ append _)
   }
 */
-  override def stream : Observable[InputStream] =
-    Observable.from(ziplist).flatMap(new ZipStream(_,extension).stream)
+  override def stream : Stream[InputStream] =
+    ziplist.map(new ZipStream(_,extension).stream).reduceLeft(_ append _)
   
   val ziplist = new File(dirpath)
       .listFiles.filter(isZipFile)

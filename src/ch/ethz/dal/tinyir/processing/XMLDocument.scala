@@ -11,7 +11,7 @@ class XMLDocument (is: InputStream) extends Document {
   
  def this(fname: String) = this(new BufferedInputStream(new FileInputStream(fname)))
 
-  @transient val doc : XMLDoc = {
+  val doc : XMLDoc = {
     val dBuilder  = XMLDocument.dbFactory.newDocumentBuilder
     val d = dBuilder.parse(is)
     is.close()

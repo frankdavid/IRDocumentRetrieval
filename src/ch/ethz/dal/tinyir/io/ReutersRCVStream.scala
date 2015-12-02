@@ -3,11 +3,10 @@ package ch.ethz.dal.tinyir.io
 import ch.ethz.dal.tinyir.processing.ReutersRCVParse
 import ch.ethz.dal.tinyir.processing.Tokenizer
 import ch.ethz.dal.tinyir.processing.XMLDocument
-import rx.lang.scala.Observable
 
 class ReutersRCVStream(path: String, ext: String = ".xml") 
 extends ParsedXMLStream(new ZipDirStream(path, ".xml")){
-  def stream : Observable[XMLDocument] = unparsed.stream.map(is => new ReutersRCVParse(is))
+  def stream : Stream[XMLDocument] = unparsed.stream.map(is => new ReutersRCVParse(is))
   def length = unparsed.length 
 }
 
