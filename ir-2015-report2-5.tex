@@ -22,7 +22,7 @@ Each document is preprocessed in the following 3 steps:
 
 \begin{itemize}
 	\item Tokenization: \\
-	As the first step, we split the document into a stream of words. We split on whitespace characters and punctuation marks.
+	As the first step, we split the document into a stream of words. We split on whitespace characters and punctuation marks. We remove stop words, present in the \texttt{resources/stopwords.txt} file.
 	
 	\item Splitting: \\
 	Unfortunately spaces are frequently missing in the document collection. To overcome this issue, we have implemented a splitting mechanism, which attempts to split meaningless words into two existing words using a dictionary.
@@ -38,7 +38,7 @@ Each document is preprocessed in the following 3 steps:
 This requires two iterations over the document collection.
 \begin{itemize}
 	\item
-	We extract document frequency data for all stems. We optimized this step in order to decrease the runtime (see section Optimization). TODO: 2 stems? 
+	We extract document frequency data for all stems. We optimized this step in order to decrease the runtime (see section Optimization). We increased the accuracy by using a mixture of unigrams and bigrams. 
 	\item 
 	We calculate tfIdf(d) as
 	$\sum_{w\in query} \log(tf(w, d) + 1) * \log(n)-log(df(w))$
@@ -46,9 +46,41 @@ This requires two iterations over the document collection.
 	For the implementation, see the class \texttt{TfIdfModel}.
 \end{itemize}
 
+\textbf{Results}\\
+
+\begin{center}
+\begin{tabular}{l r}
+
+	Precision: & 0.179\\
+	Recall: & 0.179\\
+	F1 score: & 0.097\\
+	MAP: & 0.291\\
+\end{tabular} \\
+\footnotesize{(We have not applied shifting to our results to match the qrel data size)}
+\end{center}
+
 \subsection{Language model with Jelinek-Mercer smoothing}
 
+We applied the following formula:
+$\Pr(w|d)=(1-\lambda)\hat{\Pr}(w|d) + \lambda*\frac{cf(w)}{\sum_v cf(v)}$
+where $\hat{\Pr}(w|d) = \frac{tf(w,d)}{\sum{tf(v,d)}}$. \\
 
+A score for a document-query pair is calculated as:\\
+$\sum_{w\in q} log(\Pr(w|d)) = \sum_{w \in q \land w\in d}\log[1 + \frac{1-\lambda_d}{\lambda_d}*\frac{\hat{\Pr}(w|d)}{\Pr(w)}] + \log \lambda$\\
+
+We experimented with different $\lambda$ values, including values as a function of the document size our final choice was $\lambda=0.3$.\\
+
+\textbf{Results}\\
+
+\begin{center}
+	\begin{tabular}{l r}
+		Precision: & 0.269\\
+		Recall: & 0.269\\
+		F1 score: & 0.153\\
+		MAP: & 0.346\\
+\end{tabular} \\
+\footnotesize{(We have not applied shifting to our results to match the qrel data size)}
+\end{center}
 
 \subsection{A failed attempt: Factored language model}
 We also implemented a variant of the factored language model using the Stanford Part-Of-Speech tagger library, however unfortunately we had to recognize in our tests that tagging of the entire document collection would take more than a week.
@@ -60,7 +92,7 @@ We used \textit{sbt} for building.
 
 The following steps are required to run the application:
 \begin{itemize}
-	\item Specify file paths in \texttt{FilePathConfig.scala}
+	\item Specify file paths in \texttt{FilePathConfig.scala}.
 	\item Specify the models to be tested in \texttt{RetrievalSystem.scala}'s main method.
 	\item Run \texttt{Exporter} (this is required only once to export the corpus into a single file).
 	\item Run \texttt{RetrievalSystem}.
@@ -71,8 +103,8 @@ The following command will list all available applications, and then makes it po
 {\centering
 \texttt{env JAVA\_OPTS="-Xmx6G" sbt run} \par
 }
-
-The memory requirement of the application depends on the number of parallel tests and the algorithm parameters.
+\vspace{0.5cm}
+The memory requirement of the application depends on the number of parallel tests and the algorithm parameters (for example, running the 5 tests that are present in the submitted file, requires approximately 50GB of RAM, which is mainly due to the enormous term frequency size when considering bigrams).
 
 
 

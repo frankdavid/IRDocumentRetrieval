@@ -4,16 +4,13 @@ import java.io._
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import edu.stanford.nlp.tagger.maxent.MaxentTagger
-
 import scala.collection
-import scala.collection.JavaConversions._
 import scala.collection.immutable.IndexedSeq
 import scala.collection.mutable
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.util.matching.Regex
-import scala.concurrent.ExecutionContext.Implicits.global
 
 object RetrievalSystem {
 
@@ -43,34 +40,35 @@ object RetrievalSystem {
   }
 
 
-  def scoreFactoredLanguageModel(): Unit = {
-    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
-    val tagger = new MaxentTagger("resources/models/english-bidirectional-distsim.tagger")
-    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
-      val wordTagWordFrequency = mutable.Map[(String, String, String), Int]()
-      var score = 0d
-      val sentences = MaxentTagger.tokenizeText(new StringReader(doc.content))
-      for (sentence <- sentences) {
-        val tagged = tagger.tagSentence(sentence)
-        var prevWord: String = null
-        var prevTag: String = null
-        for (wordTag <- tagged) {
-          val tag = wordTag.tag()
-          val word = wordTag.word()
-          if (prevWord != null && prevTag != null) {
-            val key = (prevWord, prevTag, word)
-            wordTagWordFrequency(key) = wordTagWordFrequency.getOrElse(key, 0) + 1
-          }
-          prevWord = word
-          prevTag = tag
-        }
-      }
-//      for (query <- topics) {
-//        query.title
+//  unfortunately this proved to be too slow
+//
+//  def scoreFactoredLanguageModel(): Unit = {
+//    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
+//    val tagger = new MaxentTagger("resources/models/english-bidirectional-distsim.tagger")
+//    for (doc <- new ProgressIndicatorWrapper(tipsterCorpusIterator)) {
+//      val wordTagWordFrequency = mutable.Map[(String, String, String), Int]()
+//      var score = 0d
+//      val sentences = MaxentTagger.tokenizeText(new StringReader(doc.content))
+//      for (sentence <- sentences) {
+//        val tagged = tagger.tagSentence(sentence)
+//        var prevWord: String = null
+//        var prevTag: String = null
+//        for (wordTag <- tagged) {
+//          val tag = wordTag.tag()
+//          val word = wordTag.word()
+//          if (prevWord != null && prevTag != null) {
+//            val key = (prevWord, prevTag, word)
+//            wordTagWordFrequency(key) = wordTagWordFrequency.getOrElse(key, 0) + 1
+//          }
+//          prevWord = word
+//          prevTag = tag
+//        }
 //      }
-    }
-  }
+//    }
+//  }
 
+//  we could not finish this one :(
+//
 //  def scoreDistanceModel(): Unit = {
 //    val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
 //    val extractor = termExtractor.copy(maxWindowSize = 1) // make sure, we are generating unigrams
@@ -125,10 +123,10 @@ object RetrievalSystem {
       val collectionFrequency = mutable.Map[String, Int]()
       val corpus = new ProgressIndicatorWrapper[TipsterDocument](tipsterCorpusIterator)
       corpus.foreach { doc =>
-        doc.terms(2).foreach { token =>
+        doc.terms.foreach { token =>
           collectionFrequency(token) = collectionFrequency.getOrElse(token, 0) + 1
         }
-        doc.terms(2).distinct.foreach { token =>
+        doc.terms.distinct.foreach { token =>
           documentFrequency(token) = documentFrequency.getOrElse(token, 0) + 1
         }
       }
@@ -143,7 +141,6 @@ object RetrievalSystem {
     }
 
   }
-
 
   def readBenchmarkData(path: String): Map[Int, Set[String]] = {
     val lines = scala.io.Source.fromFile(path).mkString.split("\n")
@@ -164,8 +161,13 @@ object RetrievalSystem {
   }
 
   def main(args: Array[String]) {
-    val models = Seq(new TfIdfModel(1), new TfIdfModel(2), new JelinekMercerSmoothingLanguageModel(0.3),
-      new JelinekMercerSmoothingLanguageModel(0.5), new JelinekMercerSmoothingLanguageModel(0.8))
+    val models = Seq(
+      new TfIdfModel(1),
+      new TfIdfModel(2),
+      new JelinekMercerSmoothingLanguageModel(0.3),
+      new JelinekMercerSmoothingLanguageModel(0.5),
+      new JelinekMercerSmoothingLanguageModel(0.8)
+    )
 
     val date = new SimpleDateFormat("YYYYMMdd_HHmmss").format(new Date())
     val outputDir = new File(s"output/$date")
@@ -210,11 +212,11 @@ object RetrievalSystem {
   }
 
 
-  case class Query(queryTopic: Topic, maxWindowSize: Int)(implicit termExtractor: TermExtractor) {
+  case class Query(queryTopic: Topic)(implicit termExtractor: TermExtractor) {
     @inline def id: Int = queryTopic.id
 
     val terms: Seq[String] = {
-      termExtractor.extractTokens(queryTopic.title, maxWindowSize) //++ termExtractor.extractTokens(queryTopic.concepts)
+      termExtractor.extractTokens(queryTopic.title)
     }
 
     val termsSet = terms.toSet

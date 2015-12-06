@@ -5,16 +5,17 @@ import ch.ethz.ir.project2.RetrievalSystem.Query
 
 class JelinekMercerSmoothingLanguageModel(lambda: Double) extends Model {
 
-  implicit val termExtractor = TermExtractor(shouldSplit = true, shouldStem = true)
+  implicit val termExtractor = TermExtractor(shouldSplit = true, shouldStem = true, maxWindowSize = 1)
 
   def score(input: ModelInput): Unit = {
     val tipsterCorpusIterator = new TipsterUnzippedIterator(FilePathConfig.unzippedCorpus)
-    val cfSum = input.collectionFrequency.values.sum.toDouble
+    val collectionFrequency = input.collectionFrequency
+    val cfSum = collectionFrequency.values.sum.toDouble
 
-    val queries = input.topics.map(Query(_, 1)(termExtractor))
+    val queries = input.topics.map(Query(_)(termExtractor))
     var progressInt = 0
     for (doc <- tipsterCorpusIterator) {
-      val docTerms = doc.terms(1)
+      val docTerms = doc.terms
       val docTermsSet = docTerms.toSet
       val tf = TermFrequencies.tf(docTerms)
       val tfSum = tf.values.sum.toDouble
@@ -23,8 +24,8 @@ class JelinekMercerSmoothingLanguageModel(lambda: Double) extends Model {
           var sumlogPwd = math.log(lambda)
           for (term <- docTermsSet.intersect(query.termsSet)) {
             val pHatwd = tf.getOrElse(term, 0) / tfSum
-            val pw = input.collectionFrequency.getOrElse(term, 0) / cfSum
-            sumlogPwd += math.log(1 + (1 - lambda / lambda * pHatwd / pw))
+            val pw = collectionFrequency.getOrElse(term, 0) / cfSum
+            sumlogPwd += math.log(1 + ((1 - lambda) / lambda * pHatwd / pw))
           }
           add(query.id, ScoredResult(doc.name, sumlogPwd))
         }

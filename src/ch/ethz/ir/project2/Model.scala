@@ -36,7 +36,7 @@ abstract class Model {
       benchmarks.get(topic.id).map { actual =>
         val pr = PrecisionRecall.evaluate(predicted, actual)
         val f = FScore.evaluate(predicted, actual)
-        val ap = AveragePrecision.evaluate(queryHeaps(topic.id).toList.sortWith(_.score > _.score).map(_.title), actual)
+        val ap = AveragePrecision.evaluate(queryHeaps(topic.id).toList.sortBy(-_.score).map(_.title), actual)
         topic -> PerformanceScore(pr.precision, pr.recall, f, ap)
       }
     }
@@ -85,6 +85,8 @@ abstract class Model {
     topicOutput.close()
     detailed.close()
   }
+
+  override def toString = name
 
   case class ScoredResult(title: String, score: Double)
 }

@@ -5,7 +5,7 @@ import ch.ethz.dal.tinyir.processing.{Tokenizer, StopWords}
 import scala.collection.mutable
 import scala.io.Source
 
-case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean) {
+case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean, maxWindowSize: Int) {
 
   private val stopWords = new StopWords()
 
@@ -41,12 +41,12 @@ case class TermExtractor(shouldStem: Boolean, shouldSplit: Boolean) {
     }.getOrElse(Seq(string))
   }
 
-  def extractTokens(string: String, maxWindowSize: Int = 1): Seq[String] = {
+  def extractTokens(string: String): Seq[String] = {
     val tokens = Tokenizer.tokenize(string)
-    extractTokens(tokens, maxWindowSize)
+    extractTokens(tokens)
   }
 
-  def extractTokens(tokens: Seq[String], maxWindowSize: Int): Seq[String] = {
+  def extractTokens(tokens: Seq[String]): Seq[String] = {
     val split = if (shouldSplit) tokens.flatMap(splitIntoWords) else tokens
     val filtered = stopWords.filter(split)
 

@@ -12,7 +12,7 @@ class TipsterUnzippedIterator(fileName: String) extends AbstractIterator[Tipster
 
   readNext()
 
-  def hasNext = _hasNext
+  def hasNext =  _hasNext
 
   def next() = {
     if (_hasNext) {
